@@ -1,0 +1,10 @@
+C:\Users\Cathy\source\repos\carSystem\carSystem\bin\Debug\carSystem.exe.config
+C:\Users\Cathy\source\repos\carSystem\carSystem\bin\Debug\carSystem.exe
+C:\Users\Cathy\source\repos\carSystem\carSystem\bin\Debug\carSystem.pdb
+C:\Users\Cathy\source\repos\carSystem\carSystem\obj\Debug\carSystem.csprojAssemblyReference.cache
+C:\Users\Cathy\source\repos\carSystem\carSystem\obj\Debug\carSystem.Form1.resources
+C:\Users\Cathy\source\repos\carSystem\carSystem\obj\Debug\carSystem.Properties.Resources.resources
+C:\Users\Cathy\source\repos\carSystem\carSystem\obj\Debug\carSystem.csproj.GenerateResource.cache
+C:\Users\Cathy\source\repos\carSystem\carSystem\obj\Debug\carSystem.csproj.CoreCompileInputs.cache
+C:\Users\Cathy\source\repos\carSystem\carSystem\obj\Debug\carSystem.exe
+C:\Users\Cathy\source\repos\carSystem\carSystem\obj\Debug\carSystem.pdb
