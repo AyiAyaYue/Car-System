@@ -44,6 +44,11 @@ namespace carSystem
                     string turn = serialPort1.ReadLine();
                     turn = turn.Trim();
                     info.Items.Add(turn);
+                } else if (message == "alarmState")
+                {
+                    string alarmState = serialPort1.ReadLine();
+                    alarmState = alarmState.Trim();
+                    info.Items.Add(alarmState);
                 }
             }
         } 

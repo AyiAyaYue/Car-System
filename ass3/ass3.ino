@@ -1,9 +1,9 @@
 /*
  Author: Yunyue Li
- Date: 11.11.2020
+ Date: 13.11.2020
  Assignment 3: Car system
  */
-#include "Display.h"
+
 #include <DHT11.h>
 #include <Display.h>
 #include <TM1637Display.h>
@@ -18,10 +18,10 @@
 #define LED_GREEN 5
 #define LED_RED 4
 #define BUTTON_DELAY  50 // ms
-#define LED_INTERVAL 1000 // ms
+#define LED_INTERVAL 1000 // blink every 1 sec
 #define TURN_DELAY 50
-#define NTC_DELAY 5000
-#define LDR_DELAY 50
+#define NTC_DELAY 5000 // get new temp every 5 sec
+#define LDR_DELAY 2000 //delay for 2 sec, in case there is a cloud or shadow 
 
 #define NTC_R25  10000              // the resistance of the NTC at 25'C is 10k ohm
 #define NTC_MATERIAL_CONSTANT  3950 
@@ -34,9 +34,7 @@ int ledState = HIGH;
 unsigned long lastTimeBlinked = 0;
 
 unsigned long lastTurn = 0;
-
 unsigned long lastNTC = 0;
-
 unsigned long lastLDR = 0;
 
 bool goLeft = false;
@@ -47,16 +45,15 @@ enum Steering {
   right
 };
 
-int oldSteering = -1;
+int prevSteering = -1; //avoid conflict
 
-enum mode {
+enum Mode {
   normal,
   hazard
 };
 
-int carMode = 0;
-
-String turn;
+int carMode = Mode::normal;
+int prevCarMode = Mode::normal;
 
 void setup() {
   Serial.begin(9600);
@@ -69,155 +66,133 @@ void setup() {
   pinMode(LED_BLUE, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_RED, OUTPUT);
+
+  Display.clear();
 }
 
-
-
-
 void loop() {
+  // NTC debounce setting
   if (millis() - lastNTC > NTC_DELAY) {
     lastNTC = millis();
 
-    float temp = get_temperature();
     Serial.println("temp");
-    Serial.println(temp);
+    Serial.println(getTemperature());
   }
-
-  if (millis() - lastLDR > LDR_DELAY){
+  
+  // LDR debounce setting
+  if (millis() - lastLDR > LDR_DELAY) {
     lastLDR = millis();
 
-    bool darkEnviro = map(analogRead(LDR), 0, 500, 0, 1);
-    String headlight;
+    bool lightEnviro = map(analogRead(LDR), 0, 200, 0, 1); 
+    String headlight;                                      
 
-    if (darkEnviro) {
+    if (!lightEnviro) {
       digitalWrite(LED_GREEN, HIGH);
       headlight = "ON";
-    } else if (!darkEnviro) {
+    } else if (lightEnviro) {
       digitalWrite(LED_GREEN, LOW);
       headlight = "OFF";
     }
+    
     Serial.println("headlight");
     Serial.println(headlight);
   }
 
-  if (carMode == mode::normal){
-    digitalWrite(LED_RED, LOW);
-
-    //String turn;
+  // button
+  if (isButtonPressed(BTN_LEFT, lastBtnLeftState)) {
+    if (!goLeft) {
+      sendTurnMessageLeft();  //only send message once to serial port right after pressing the button, 
+    }                         //instead of sending messages during debounce time. 
     
-    if (isButtonPressed(BTN_LEFT, lastBtnLeftState)) {
     goLeft = true;
     goRight = false;
-    turn = "Turn Left";
-    Serial.println("turn");
-    Serial.println(turn);
   } else if (isButtonPressed(BTN_RIGHT, lastBtnRightState)) {
+    if (!goRight) {
+      sendTurnMessageRight();
+    }
+    
     goLeft = false;
     goRight = true;
-    turn = "Turn Right";
-    Serial.println("turn");
-    Serial.println(turn);
   }
-  
-  int steering = map(analogRead(POT), 0, 1024, 0, 2);
 
+  // pot debounce setting
   if (millis() - lastTurn > TURN_DELAY) {
     lastTurn = millis();
 
+    int steering = map(analogRead(POT), 0, 1024, 0, 2);
+
     if (steering == Steering::left) {
-      if (oldSteering == Steering::right) {
+      if (prevSteering == Steering::right) {
         goRight = false;
-        digitalWrite(LED_BLUE, LOW);
+
+        if (carMode == Mode::normal) {
+          digitalWrite(LED_BLUE, LOW);    //streeing controls the leds. 
+        }                                 //After pressing the button, the blue led blinks. It stops blinking until the streeing switch from right to left
       }
     } else if (steering == Steering::right) {
-      if (oldSteering == Steering::left) {
+      if (prevSteering == Steering::left) {
         goLeft = false;
-        digitalWrite(LED_YELLOW, LOW);
+        
+        if (carMode == Mode::normal) {
+          digitalWrite(LED_YELLOW, LOW);
+        }
       }
     }
-    oldSteering = steering;
+    
+    prevSteering = steering;
   }
 
-  if (millis() - lastTimeBlinked > LED_INTERVAL) {
-    lastTimeBlinked = millis();
-    
-    if (goLeft) {
-      digitalWrite(LED_BLUE, LOW);
-      digitalWrite(LED_YELLOW, ledState);
-    } else if (goRight) {
-      digitalWrite(LED_YELLOW, LOW);
-      digitalWrite(LED_BLUE, ledState);
+  if (carMode == Mode::normal) {
+    if (prevCarMode == Mode::hazard) {   //in case the leds state remains on when switch from hazard to normal
+      setAlarm(false);
     }
-    
-    ledState = ! ledState;
-   }
-  }
-
-  if (carMode == mode::hazard){
+  
     if (millis() - lastTimeBlinked > LED_INTERVAL) {
       lastTimeBlinked = millis();
-      digitalWrite(LED_YELLOW, ledState);
-      digitalWrite(LED_BLUE, ledState);
-      digitalWrite(LED_RED, ledState);
-    }
-    
-    ledState = ! ledState;
-
-    if (isButtonPressed(BTN_LEFT, lastBtnLeftState)) {
-    goLeft = true;
-    goRight = false;
-    turn = "Turn Left";
-    Serial.println("turn");
-    Serial.println(turn);
-  } else if (isButtonPressed(BTN_RIGHT, lastBtnRightState)) {
-    goLeft = false;
-    goRight = true;
-    turn = "Turn Right";
-    Serial.println("turn");
-    Serial.println(turn);
-  }
-  
-  int steering = map(analogRead(POT), 0, 1024, 0, 2);
-
-  if (millis() - lastTurn > TURN_DELAY) {
-    lastTurn = millis();
-
-    if (steering == Steering::left) {
-      if (oldSteering == Steering::right) {
-        goRight = false;
-
+      
+      if (goLeft) {
+        digitalWrite(LED_BLUE, LOW);
+        digitalWrite(LED_YELLOW, ledState);
+      } else if (goRight) {
+        digitalWrite(LED_YELLOW, LOW);
+        digitalWrite(LED_BLUE, ledState);
       }
-    } else if (steering == Steering::right) {
-      if (oldSteering == Steering::left) {
-        goLeft = false;
-
-      }
+      
+      ledState = !ledState;
     }
-    oldSteering = steering;
   }
- }
 
-  
+  if (carMode == Mode::hazard) {
+    if (millis() - lastTimeBlinked > LED_INTERVAL) {
+      lastTimeBlinked = millis();
+      setAlarm(ledState);
+      ledState = !ledState;
+    }
+  }
+
+  prevCarMode = carMode;
 
   if (Serial.available()){
     String command = Serial.readStringUntil('\n');
-    if (command == "alarm"){
-      carMode = mode::hazard;
-      digitalWrite(LED_RED, HIGH);
+    String alarmState;
+    
+    if (command == "alarm") {
+      carMode = Mode::hazard;
+      alarmState = "Alarm On";
+    } else if (command == "noalarm") {
+      carMode = Mode::normal;
+      alarmState = "Alarm Off";
     }
-    if (command == "noalarm") {
-      carMode = mode::normal;
-    }
+
+    Serial.println("alarmState");
+    Serial.println(alarmState);
   }
 }
 
-float get_temperature(){
-  float temperature, resistance;
-  int value;
-  value = analogRead(NTC);                      //Temperature app
-  resistance   = (float)value * NTC_R25 / (1024 - value); // Calculate resistance
-  temperature  = 1 / (log(resistance / NTC_R25) / NTC_MATERIAL_CONSTANT + 1 / 298.15) - 273.15;
-  return temperature;
+float getTemperature(){
+  int value = analogRead(NTC); //Temperature app
+  float resistance = (float)value * NTC_R25 / (1024 - value); // Calculate resistance
+  return 1 / (log(resistance / NTC_R25) / NTC_MATERIAL_CONSTANT + 1 / 298.15) - 273.15;
 }
 
 bool isButtonPressed(int pinNumber, int &lastButtonState) {
@@ -235,4 +210,20 @@ bool isButtonPressed(int pinNumber, int &lastButtonState) {
   }
   
   return false;
+}
+
+void setAlarm(bool state) {
+  digitalWrite(LED_YELLOW, state);
+  digitalWrite(LED_BLUE, state);
+  digitalWrite(LED_RED, state);
+}
+
+void sendTurnMessageLeft() {
+  Serial.println("turn");
+  Serial.println("Turn Left");
+}
+
+void sendTurnMessageRight() {
+  Serial.println("turn");
+  Serial.println("Turn Right");
 }
